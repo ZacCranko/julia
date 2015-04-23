@@ -42,12 +42,12 @@ static long system_page_size;
 
 // malloc wrappers, aligned allocation
 
-#if defined(_P64) || defined(__APPLE__)
+#if (defined(_P64) || defined(__APPLE__)) && !defined(_COMPILER_MICROSOFT_)
 #define malloc_a16(sz) malloc(sz)
 #define realloc_a16(p, sz, oldsz) realloc((p), (sz))
 #define free_a16(p) free(p)
 
-#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
+#elif defined(_OS_WINDOWS_) /* 32-bit OS, or MSVC */
 #define malloc_a16(sz) _aligned_malloc((sz)?(sz):1, 16)
 #define realloc_a16(p, sz, oldsz) _aligned_realloc((p), (sz)?(sz):1, 16)
 #define free_a16(p) _aligned_free(p)
