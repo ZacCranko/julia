@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## UV based file operations ##
 
 module FS
@@ -62,7 +64,7 @@ type AsyncFile <: AbstractFile
     open::Bool
 end
 
-isopen(f::Union(File,AsyncFile)) = f.open
+isopen(f::Union{File,AsyncFile}) = f.open
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
 uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)
@@ -113,15 +115,11 @@ end
 # For move command
 function rename(src::AbstractString, dst::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
-
     # on error, default to cp && rm
     if err < 0
-        # Note that those two functions already handle their errors.
-        # first copy
-        sendfile(src, dst)
-
-        # then rm
-        unlink(src)
+        # remove_destination: is already done in the mv function
+        cp(src, dst; remove_destination=false, follow_symlinks=false)
+        rm(src; recursive=true)
     end
 end
 
@@ -156,7 +154,10 @@ function sendfile(src::AbstractString, dst::AbstractString)
 end
 
 @windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
-@non_windowsxp_only function symlink(p::AbstractString, np::AbstractString)
+function symlink(p::AbstractString, np::AbstractString)
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
+        error("Windows XP does not support soft symlinks")
+    end
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
@@ -165,8 +166,6 @@ end
     end
     uv_error("symlink",err)
 end
-@windowsxp_only symlink(p::AbstractString, np::AbstractString) =
-    error("WindowsXP does not support soft symlinks")
 
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
@@ -201,7 +200,7 @@ function write{T}(f::File, a::Array{T})
     if isbits(T)
         write(f,pointer(a),length(a)*sizeof(eltype(a)))
     else
-        invoke(write, (IO, Array), f, a)
+        invoke(write, Tuple{IO, Array}, f, a)
     end
 end
 
@@ -242,7 +241,7 @@ function read!{T}(f::File, a::Array{T}, nel=length(a))
                     f.handle, a, nb)
         uv_error("read",ret)
     else
-        invoke(read, (IO, Array), s, a)
+        invoke(read, Tuple{IO, Array}, s, a)
     end
     a
 end

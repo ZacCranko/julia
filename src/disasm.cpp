@@ -164,8 +164,13 @@ void SymbolTable::createSymbols()
         uint64_t addr = isymb->first - ip;
         std::ostringstream name;
         name << "L" << addr;
+#ifdef LLVM37
+        MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
+        symb->setVariableValue(MCConstantExpr::create(addr, Ctx));
+#else
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
         symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+#endif
         isymb->second = symb;
     }
 }
@@ -319,7 +324,8 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
     OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        jl_printf(JL_STDERR, "error: no disassembler for target %s\n",
+                  TripleName.c_str());
         return;
     }
 
@@ -511,7 +517,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
             switch (S) {
             case MCDisassembler::Fail:
                 if (pass != 0)
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
 #elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
@@ -521,7 +527,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                     stream << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
 #endif
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward

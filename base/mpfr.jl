@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module MPFR
 
 export
@@ -59,12 +61,12 @@ end
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-BigFloat(x::BigFloat) = x
+convert(::Type{BigFloat}, x::BigFloat) = x
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     @eval begin
-        function BigFloat(x::($fC))
+        function convert(::Type{BigFloat}, x::($fC))
             z = BigFloat()
             ccall(($(string(:mpfr_set_,fJ)), :libmpfr), Int32, (Ptr{BigFloat}, ($fC), Int32), &z, x, ROUNDING_MODE[end])
             return z
@@ -72,19 +74,19 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     end
 end
 
-function BigFloat(x::BigInt)
+function convert(::Type{BigFloat}, x::BigInt)
     z = BigFloat()
     ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-BigFloat(x::Integer) = BigFloat(BigInt(x))
+convert(::Type{BigFloat}, x::Integer) = BigFloat(BigInt(x))
 
-BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
-BigFloat(x::Union(UInt8,UInt16,UInt32)) = BigFloat(convert(Culong,x))
+convert(::Type{BigFloat}, x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Clong,x))
+convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong,x))
 
-BigFloat(x::Union(Float16,Float32)) = BigFloat(Float64(x))
-BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
+convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
+convert(::Type{BigFloat}, x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     z = BigFloat()
@@ -93,8 +95,6 @@ function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
 end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
-convert{S}(::Type{BigFloat}, x::Rational{S}) = BigFloat(x) # to resolve ambiguity
-convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
 ## BigFloat -> Integer
@@ -127,20 +127,20 @@ unsafe_cast{T<:Integer}(::Type{T}, x::BigFloat, r::RoundingMode) = unsafe_cast(T
 
 unsafe_trunc{T<:Integer}(::Type{T}, x::BigFloat) = unsafe_cast(T,x,RoundToZero)
 
-function trunc{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function trunc{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end
-function floor{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function floor{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundDown)
 end
-function ceil{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function ceil{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundUp)
 end
 
-function round{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+function round{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,ROUNDING_MODE[end])
 end
@@ -161,7 +161,6 @@ function convert(::Type{BigInt},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(BigInt,x)
 end
-Base.BigInt(x::BigFloat) = convert(BigInt,x)
 
 function convert{T<:Integer}(::Type{T},x::BigFloat)
     isinteger(x) || throw(InexactError())
@@ -763,18 +762,23 @@ function with_bigfloat_precision(f::Function, precision::Integer)
 end
 
 function string(x::BigFloat)
-    lng = 128
-    for i = 1:2
-        z = Array(UInt8, lng + 1)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), z, lng + 1, "%.Re", &x)
-        if lng < 128 || i == 2
-            return bytestring(z[1:lng])
-        end
+    # In general, the number of decimal places needed to read back the number exactly
+    # is, excluding the most significant, ceil(log(10, 2^precision(x)))
+    k = ceil(Int32, precision(x) * 0.3010299956639812)
+    lng = k + Int32(8) # Add space for the sign, the most significand digit, the dot and the exponent
+    buf = Array(UInt8, lng + 1)
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
+    if lng < k + 5 # print at least k decimal places
+        lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.$(k)Re", &x)
+    elseif lng > k + 8
+        buf = Array(UInt8, lng + 1)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
+    return bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
-show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
+show(io::IO, b::BigFloat) = print(io, string(b))
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
 
 # get/set exponent min/max

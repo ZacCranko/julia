@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import Base.MPFR
 # constructors
 with_bigfloat_precision(53) do
@@ -363,9 +365,24 @@ z = parse(BigInt,"9223372036854775809")
 @test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
 
 # string representation
-str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
+str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012"
 with_bigfloat_precision(406) do
     @test string(nextfloat(BigFloat(1))) == str
+end
+with_bigfloat_precision(21) do
+    @test string(zero(BigFloat)) == "0.0000000"
+    @test string(parse(BigFloat, "0.1")) == "1.0000002e-01"
+    @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
+end
+with_bigfloat_precision(40) do
+    @test string(zero(BigFloat)) == "0.0000000000000"
+    @test string(parse(BigFloat, "0.1")) == "1.0000000000002e-01"
+    @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
+end
+with_bigfloat_precision(123) do
+    @test string(zero(BigFloat)) == "0.00000000000000000000000000000000000000"
+    @test string(parse(BigFloat, "0.1")) == "9.99999999999999999999999999999999999953e-02"
+    @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
 end
 
 # eps
@@ -823,4 +840,4 @@ err(z, x) = abs(z - x) / abs(x)
 @test MPFR.get_emax() == MPFR.get_emax_max()
 
 # issue #10994: handle embedded NUL chars for string parsing
-@test_throws ArgumentError BigFloat("1\0")
+@test_throws ArgumentError parse(BigFloat, "1\0")

@@ -1,9 +1,11 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## converting pointers to an appropriate unsigned ##
 
 const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
-convert{T<:Union(Int,UInt)}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
+convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,convert(UInt, x))
 
 # integer to pointer
@@ -22,8 +24,6 @@ unsafe_convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, unsafe_con
 # convert strings to ByteString etc. to pass as pointers
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
-cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
-cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
 
 unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 unsafe_convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)

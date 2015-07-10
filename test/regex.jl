@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function collect_eachmatch(re, str, overlap=false)
     [m.match for m in collect(eachmatch(re, str, overlap))]
@@ -30,5 +31,14 @@ buf = PipeBuffer()
 show(buf, r"")
 @test readall(buf) == "r\"\""
 
-# issue #10994: PCRE does not allow NUL chars in the pattern
-@test_throws ArgumentError Regex("a\0b")
+# see #10994, #11447: PCRE2 allows NUL chars in the pattern
+@test ismatch(Regex("^a\0b\$"), "a\0b")
+
+# regex match / search string must be a ByteString
+@test_throws ArgumentError match(r"test", utf32("this is a test"))
+@test_throws ArgumentError search(utf32("this is a test"), r"test")
+
+# Named subpatterns
+m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+@test (m[:a], m[2], m["b"]) == ("x", "y", "z")
+@test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"

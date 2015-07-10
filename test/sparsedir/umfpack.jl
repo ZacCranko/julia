@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 \ do33, do33)
@@ -53,4 +55,4 @@ end
 
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
-@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
+@test_approx_eq (x*(lufact(x) \ ones(2))) ones(2)

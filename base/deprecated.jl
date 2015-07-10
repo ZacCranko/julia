@@ -1,3 +1,23 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+# Deprecated functions and objects
+#
+# Please add new deprecations at the bottom of the file.
+# A function deprecated in a release will be removed in the next one.
+# Please also add a reference to the pull request which introduced the
+# deprecation.
+#
+# For simple cases where a direct replacement is available, use @deprecate:
+# the first argument is the signature of the deprecated method, the second one
+# is the call which replaces it. Remove the definition of the deprecated method
+# and unexport it, as @deprecate takes care of calling the replacement
+# and of exporting the function.
+#
+# For more complex cases, move the body of the deprecated method in this file,
+# and call depwarn() directly from inside it. The symbol depwarn() expects is
+# the name of the function, which is used to ensure that the deprecation warning
+# is only printed the first time for each call place.
+
 macro deprecate(old,new)
     meta = Expr(:meta, :noinline)
     if isa(old,Symbol)
@@ -36,10 +56,18 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if JLOptions().depwarn!=0
+    opts = JLOptions()
+    if opts.depwarn > 0
+        ln = unsafe_load(cglobal(:jl_lineno, Int))
+        fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
-        warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+        if opts.depwarn == 1 # raise a warning
+            warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
+                 filename=fn, lineno=ln)
+        elseif opts.depwarn == 2 # raise an error
+            throw(ErrorException(msg))
+        end
     end
 end
 
@@ -85,7 +113,7 @@ export Nothing
 const Nothing = Void
 
 export None
-const None = Union()
+const None = Union{}
 
 export apply
 function apply(f, args...)
@@ -307,22 +335,24 @@ for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32
               (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
               (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
     @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parseint($t,s) for s in a]
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
     end
 end
 for (f,t) in ((:float32, Float32), (:float64, Float64))
     @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parsefloat($t,s) for s in a]
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
     end
 end
 
 @deprecate flipud(A::AbstractArray) flipdim(A, 1)
 @deprecate fliplr(A::AbstractArray) flipdim(A, 2)
 
+@deprecate sub2ind{T<:Integer}(dims::Array{T}, sub::Array{T}) sub2ind(tuple(dims...), sub...)
+@deprecate ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T) ind2sub!(sub, tuple(dims...), ind)
+
 @deprecate strftime     Libc.strftime
 @deprecate strptime     Libc.strptime
 @deprecate flush_cstdio Libc.flush_cstdio
-@deprecate mmap         Libc.mmap
 @deprecate c_free       Libc.free
 @deprecate c_malloc     Libc.malloc
 @deprecate c_calloc     Libc.calloc
@@ -341,6 +371,8 @@ end
 @deprecate ldltfact(A::AbstractMatrix, β::Number) ldltfact(A, shift=β)
 
 @deprecate with_env(f::Function, key::AbstractString, val) withenv(f, key=>val)
+
+@deprecate ntuple(n::Integer, f::Function) ntuple(f, n)
 
 # 0.4 discontinued functions
 
@@ -400,7 +432,12 @@ function to_index{T<:Real}(A::AbstractArray{T})
     Int[to_index_nodep(x) for x in A]
 end
 
-function float_isvalid{T<:Union(Float32,Float64)}(s::AbstractString, out::Array{T,1})
+function to_index(I::Tuple)
+    depwarn("to_index(I::Tuple) is deprecated, use to_indexes(I...) instead.", :to_index)
+    to_indexes(I...)
+end
+
+function float_isvalid{T<:Union{Float32,Float64}}(s::AbstractString, out::Array{T,1})
     tf = tryparse(T, s)
     isnull(tf) || (out[1] = get(tf))
     !isnull(tf)
@@ -430,3 +467,170 @@ export float32_isvalid, float64_isvalid
 
 @deprecate BigFloat(s::AbstractString) parse(BigFloat,s)
 @deprecate BigInt(s::AbstractString) parse(BigInt,s)
+
+@deprecate (~)(x::Char)           Char(~UInt32(x))
+@deprecate (&)(x::Char, y::Char)  Char(UInt32(x) & UInt32(y))
+@deprecate (|)(x::Char, y::Char)  Char(UInt32(x) | UInt32(y))
+@deprecate ($)(x::Char, y::Char)  Char(UInt32(x) $ UInt32(y))
+
+# 11241
+
+@deprecate is_valid_char(ch::Char)          isvalid(ch)
+@deprecate is_valid_ascii(str::ASCIIString) isvalid(str)
+@deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
+@deprecate is_valid_utf16(str::UTF16String) isvalid(str)
+@deprecate is_valid_utf32(str::UTF32String) isvalid(str)
+
+@deprecate is_valid_char(ch)   isvalid(Char, ch)
+@deprecate is_valid_ascii(str) isvalid(ASCIIString, str)
+@deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
+@deprecate is_valid_utf16(str) isvalid(UTF16String, str)
+@deprecate is_valid_utf32(str) isvalid(UTF32String, str)
+
+# 11379
+
+@deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])
+
+# 10862
+
+function chol(A::AbstractMatrix, uplo::Symbol)
+    depwarn(string("chol(a::AbstractMatrix, uplo::Symbol) is deprecated, ",
+        "use chol(a::AbstractMatrix, uplo::Union{Val{:L},Val{:U}}) instead"), :chol)
+    chol(A, Val{uplo})
+end
+
+_ensure_vector(A::AbstractArray) = vec(A)
+_ensure_vector(A) = A
+_ensure_vectors() = ()
+_ensure_vectors(A, As...) = (_ensure_vector(A), _ensure_vectors(As...)...)
+function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
+    depwarn("multidimensional indexed assignment with multidimensional arrays is deprecated, use vec to convert indices to vectors", :_unsafe_setindex!)
+    _unsafe_setindex!(l, A, x, _ensure_vectors(J...)...)
+end
+
+# 11554
+
+read!(from::AbstractIOBuffer, p::Ptr, nb::Integer) = read!(from, p, Int(nb))
+function read!(from::AbstractIOBuffer, p::Ptr, nb::Int)
+    depwarn("read!(::IOBuffer, ::Ptr) is unsafe and therefore deprecated", :read!)
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    avail = nb_available(from)
+    adv = min(avail, nb)
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), p, pointer(from.data, from.ptr), adv)
+    from.ptr += adv
+    if nb > avail
+        throw(EOFError())
+    end
+    p
+end
+
+@deprecate gc_enable() gc_enable(true)
+@deprecate gc_disable() gc_enable(false)
+
+@deprecate stop_timer close
+
+function Timer(f::Function)
+    error("Timer(f) is deprecated. Use Timer(f, delay, repeat) instead.")
+end
+
+function start_timer(t, d, r)
+    error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
+end
+
+const UnionType = Union
+export UnionType
+
+const MathConst = Irrational
+
+macro math_const(sym, val, def)
+    depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
+    :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
+end
+
+export MathConst, @math_const
+
+# 11280, mmap
+
+export msync
+msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
+msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
+
+@unix_only begin
+export mmap
+function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
+    depwarn("`mmap` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap)
+    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
+    # Check that none of the computations will overflow
+    if len < 0
+        throw(ArgumentError("requested size must be ≥ 0, got $len"))
+    end
+    if len > typemax(Int)-pagesize
+        throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
+    end
+    # Set the offset to a page boundary
+    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
+    len_page::Int = (offset-offset_page) + len
+    # Mmap the file
+    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    systemerror("memory mapping failed", reinterpret(Int,p) == -1)
+    # Also return a pointer that compensates for any adjustment in the offset
+    return p, Int(offset-offset_page)
+end
+
+function munmap(p::Ptr,len::Integer)
+    depwarn("`munmap` is deprecated, `mmap` Arrays are automatically munmapped when finalized", :munmap)
+    systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
+end
+
+const MS_ASYNC = 1
+const MS_INVALIDATE = 2
+const MS_SYNC = 4
+function msync(p::Ptr, len::Integer, flags::Integer=MS_SYNC)
+    depwarn("`msync` is deprecated, use `Mmap.sync!(array)` instead", :msync)
+    systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
+end
+end
+
+
+@windows_only begin
+function munmap(viewhandle::Ptr, mmaphandle::Ptr)
+    depwarn("`munmap` is deprecated, `mmap` Arrays are automatically munmapped when finalized", :munmap)
+    status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle)!=0
+    status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle)!=0
+    if !status
+        error("could not unmap view: $(FormatMessage())")
+    end
+end
+
+function msync(p::Ptr, len::Integer)
+    depwarn("`msync` is deprecated, use `Mmap.sync!(array)` instead", :msync)
+    status = ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len)!=0
+    if !status
+        error("could not msync: $(FormatMessage())")
+    end
+end
+
+end
+
+@unix_only @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) Mmap.mmap(s, Array{T,N}, dims, offset)
+
+@windows_only begin
+type SharedMemSpec
+    name :: AbstractString
+    readonly :: Bool
+    create :: Bool
+end
+export mmap_array
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
+    depwarn("`mmap_array` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap_array)
+    if isa(s,SharedMemSpec)
+        a = Mmap.Anonymous(s.name, s.readonly, s.create)
+    else
+        a = s
+    end
+    return Mmap.mmap(a, Array{T,N}, dims, offset)
+end
+end
+
+@deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset=position(s)) mmap(s, BitArray, dims, offset)
+@deprecate mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset=position(s)) mmap(s, BitArray, dims, offset)

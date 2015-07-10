@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ##################################
 # Cross Plaform tests for spawn. #
 ##################################
@@ -97,7 +99,11 @@ end
 @test readall(setenv(`sh -c "echo \$TEST"`,"TEST"=>"Hello World")) == "Hello World\n"
 @test (withenv("TEST"=>"Hello World") do
        readall(`sh -c "echo \$TEST"`); end) == "Hello World\n"
-@test readall(setenv(`sh -c "pwd"`;dir="..")) == readall(setenv(`sh -c "cd .. && pwd"`))
+pathA = readchomp(setenv(`sh -c "pwd -P"`;dir=".."))
+pathB = readchomp(setenv(`sh -c "cd .. && pwd -P"`))
+@unix_only @test Base.samefile(pathA, pathB)
+# on windows, sh returns posix-style paths that are not valid according to ispath
+@windows_only @test pathA == pathB
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""

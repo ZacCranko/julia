@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 export
 # Modules
     Collections,
@@ -11,6 +13,7 @@ export
     Test,
     Libc,
     Libdl,
+    Mmap,
     LinAlg,
     BLAS,
     LAPACK,
@@ -68,7 +71,7 @@ export
     LinSpace,
     LocalProcess,
     LowerTriangular,
-    MathConst,
+    Irrational,
     Matrix,
     MergeSort,
     Nullable,
@@ -95,6 +98,7 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    SerializationState,
     Set,
     SharedArray,
     SharedMatrix,
@@ -162,6 +166,7 @@ export
     SystemError,
     TypeError,
     AssertionError,
+    UnicodeError,
 
 # Global constants and variables
     ARGS,
@@ -182,9 +187,11 @@ export
     Inf,
     Inf16,
     Inf32,
+    Inf64,
     NaN,
     NaN16,
     NaN32,
+    NaN64,
     im,
     π, pi,
     e, eu,
@@ -521,6 +528,7 @@ export
     invperm,
     ipermute!,
     ipermutedims,
+    isassigned,
     isperm,
     issorted,
     last,
@@ -648,6 +656,7 @@ export
     ldltfact,
     ldltfact!,
     linreg,
+    logabsdet,
     logdet,
     lu,
     lufact!,
@@ -683,6 +692,7 @@ export
     tril,
     triu!,
     triu,
+    vecdot,
     vecnorm,
     ⋅,
     ×,
@@ -818,10 +828,6 @@ export
     ind2chr,
     info,
     is_assigned_char,
-    is_valid_ascii,
-    is_valid_char,
-    is_valid_utf8,
-    is_valid_utf16,
     isalnum,
     isalpha,
     isascii,
@@ -1045,6 +1051,7 @@ export
     promote_rule,
     promote_type,
     subtypes,
+    instances,
     super,
     typeintersect,
     typejoin,
@@ -1095,7 +1102,6 @@ export
     finalizer,
     finalize,
     gc,
-    gc_disable,
     gc_enable,
     precompile,
 
@@ -1137,9 +1143,6 @@ export
     listenany,
     ltoh,
     mark,
-    mmap_array,
-    mmap_bitarray,
-    msync,
     nb_available,
     ntoh,
     open,
@@ -1175,8 +1178,6 @@ export
     serialize,
     skip,
     skipchars,
-    start_timer,
-    stop_timer,
     takebuf_array,
     takebuf_string,
     truncate,
@@ -1267,6 +1268,7 @@ export
     isfifo,
     isfile,
     islink,
+    ismount,
     ispath,
     isreadable,
     issetgid,
@@ -1328,7 +1330,6 @@ export
     @int128_str,
     @uint128_str,
     @big_str,
-    @mstr,   # triple-quoted strings
     @cmd,    # `commands`
 
     # notation for certain types
@@ -1350,6 +1351,7 @@ export
     # profiling
     @time,
     @timed,
+    @timev,
     @elapsed,
     @allocated,
     @profile,
@@ -1373,8 +1375,6 @@ export
     @unix_only,
     @osx_only,
     @linux_only,
-    @windowsxp_only,
-    @non_windowsxp_only,
 
     # tasks
     @schedule,

@@ -1,4 +1,7 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <complex.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -29,7 +32,7 @@ testUcharX(unsigned char x) {
 
 #define xstr(s) str(s)
 #define str(s) #s
-volatile int (*fptr)(unsigned char x);
+int (*volatile fptr)(unsigned char x);
 volatile int a;
 volatile int b;
 
@@ -82,6 +85,13 @@ complex_t* cptest(complex_t *a) {
     a->real += 1;
     a->imag -= 2;
     return a;
+}
+
+complex_t* cptest_static(complex_t *a) {
+    complex_t *b = (complex_t*)malloc(sizeof(complex_t));
+    b->real = a->real;
+    b->imag = a->imag;
+    return b;
 }
 
 // Native-like data types
@@ -346,7 +356,7 @@ int main() {
     fprintf(stderr,"all of the following should be 1 except xs[259] = 0\n");
     a = 3;
     b = 259;
-    fptr = (volatile int (*)(unsigned char x))&testUcharX;
+    fptr = (int (*)(unsigned char x))&testUcharX;
     if ((((size_t)fptr)&((size_t)1)) == 1) fptr = NULL;
     fprintf(stderr,"compiled with: '%s'\nxs[3] = %d\nxs[259] = %d\ntestUcharX(3) = %d\ntestUcharX(%d) = %d\nfptr(3) = %d\nfptr(259) = %d\n",
            xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX((unsigned char)b), fptr(a), fptr(b));

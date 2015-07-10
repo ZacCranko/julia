@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module GMP
 
 export BigInt
@@ -9,13 +11,13 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed
 
 if Clong == Int32
-    typealias ClongMax Union(Int8, Int16, Int32)
-    typealias CulongMax Union(UInt8, UInt16, UInt32)
+    typealias ClongMax Union{Int8, Int16, Int32}
+    typealias CulongMax Union{UInt8, UInt16, UInt32}
 else
-    typealias ClongMax Union(Int8, Int16, Int32, Int64)
-    typealias CulongMax Union(UInt8, UInt16, UInt32, UInt64)
+    typealias ClongMax Union{Int8, Int16, Int32, Int64}
+    typealias CulongMax Union{UInt8, UInt16, UInt32, UInt64}
 end
-typealias CdoubleMax Union(Float16, Float32, Float64)
+typealias CdoubleMax Union{Float16, Float32, Float64}
 
 gmp_version() = VersionNumber(bytestring(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
 gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
@@ -72,7 +74,7 @@ widen(::Type{BigInt})  = BigInt
 
 signed(x::BigInt) = x
 
-BigInt(x::BigInt) = x
+convert(::Type{BigInt}, x::BigInt) = x
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
@@ -100,29 +102,30 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     Nullable(sgn < 0 ? -z : z)
 end
 
-function BigInt(x::Union(Clong,Int32))
+function convert(::Type{BigInt}, x::Union{Clong,Int32})
     z = BigInt()
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-function BigInt(x::Union(Culong,UInt32))
+function convert(::Type{BigInt}, x::Union{Culong,UInt32})
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
-BigInt(x::Bool) = BigInt(UInt(x))
+convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 
-function BigInt(x::Float64)
+function convert(::Type{BigInt}, x::Float64)
     !isinteger(x) && throw(InexactError())
     z = BigInt()
     ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{BigInt}, Cdouble), &z, x)
     return z
 end
 
-BigInt(x::Union(Float16,Float32)) = BigInt(Float64(x))
+convert(::Type{BigInt}, x::Float16) = BigInt(Float64(x))
+convert(::Type{BigInt}, x::Float32) = BigInt(Float64(x))
 
-function BigInt(x::Integer)
+function convert(::Type{BigInt}, x::Integer)
     if x < 0
         if typemin(Clong) <= x
             return BigInt(convert(Clong,x))
@@ -150,13 +153,9 @@ function BigInt(x::Integer)
     end
 end
 
-convert(::Type{BigInt}, x::Integer) = BigInt(x)
-convert(::Type{BigInt}, x::Float16) = BigInt(x)
-convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
-
 
 rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
-function rem{T<:Union(Unsigned,Signed)}(x::BigInt, ::Type{T})
+function rem{T<:Union{Unsigned,Signed}}(x::BigInt, ::Type{T})
     u = zero(T)
     for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
         u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
@@ -191,7 +190,7 @@ function call(::Type{Float64}, n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
 
-function call{T<:Union(Float16,Float32)}(::Type{T}, n::BigInt, ::RoundingMode{:ToZero})
+function call{T<:Union{Float16,Float32}}(::Type{T}, n::BigInt, ::RoundingMode{:ToZero})
     T(Float64(n,RoundToZero),RoundToZero)
 end
 
@@ -203,6 +202,7 @@ function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Up})
     x = T(n,RoundToZero)
     x < n ? nextfloat(x) : x
 end
+
 function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Nearest})
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
@@ -331,7 +331,7 @@ for (fJ, fC) in ((:-, :neg), (:~, :com))
     end
 end
 
-function <<(x::BigInt, c::Int32)
+function <<(x::BigInt, c::Int)
     c < 0 && throw(DomainError())
     c == 0 && return x
     z = BigInt()
@@ -339,7 +339,7 @@ function <<(x::BigInt, c::Int32)
     return z
 end
 
-function >>(x::BigInt, c::Int32)
+function >>(x::BigInt, c::Int)
     c < 0 && throw(DomainError())
     c == 0 && return x
     z = BigInt()
@@ -347,7 +347,7 @@ function >>(x::BigInt, c::Int32)
     return z
 end
 
->>>(x::BigInt, c::Int32) = x >> c
+>>>(x::BigInt, c::Int) = x >> c
 
 trailing_zeros(x::BigInt) = Int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 trailing_ones(x::BigInt) = Int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
